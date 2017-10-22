@@ -1,0 +1,251 @@
+<?php
+
+/**
+ * Implements hook_form_alter().
+ */
+function erf_connect_form_alter(&$form, &$form_state, $form_id) {
+
+  if ($form_id == 'field_ui_field_edit_form') {
+    // Use to add choice field.
+    if ($form['#field']['type'] == 'entityreference'
+      || $form['#field']['type'] == 'node_reference'
+      || $form['#field']['type'] == 'user_reference') {
+
+      erf_connect_alter_field_form($form, $form_state);
+
+    }
+  }
+}
+
+/**
+ * Alters the Field's settings form to inject our custom field settings.
+ *
+ * @param array $form
+ * @param array $form_state
+ */
+function erf_connect_alter_field_form(&$form, &$form_state) {
+  $instance = $form['#instance'];
+  $field = $form['#field'];
+  $flexiforms_options = array();
+
+  $entity_type = $field['settings']['target_type'];
+  $target_bundles = array($entity_type);
+  if(!empty($field['settings']['handler_settings']['target_bundles'])) {
+    $target_bundles = array_merge(array_keys($field['settings']['handler_settings']['target_bundles']), $target_bundles);
+  }
+
+  $enabled = (!empty($instance['erf_settings']['enabled'])
+    ? 1
+    : 0);
+
+  $flexiforms_query = new EntityFieldQuery();
+  $flexiforms_query->entityCondition('entity_type', 'flexiform')
+    ->propertyCondition('base_entity', $entity_type)
+    ->propertyCondition('base_entity_bundle', $target_bundles);
+  $results = $flexiforms_query->execute();
+
+  if (!empty($results['flexiform'])) {
+    $forms = entity_load('flexiform', array_keys($results['flexiform']));
+    foreach ($forms as $flexiform) {
+      if (!empty($flexiform->displays['FlexiformDisplayCreateModal']['enabled'])) {
+        $flexiforms_options[$flexiform->id] = $flexiform->label;
+      }
+    }
+  }
+
+  $target_flexiform = !empty($instance['erf_settings']['flexiform_target_id'])
+    ? $instance['erf_settings']['flexiform_target_id']
+    : '' ;
+
+  $label = !empty($instance['erf_settings']['label'])
+    ? $instance['erf_settings']['label']
+    : t('Create a new @entity', array('@entity' => $entity_type));
+
+  $form['instance']['erf_settings'] = array(
+    'enabled' => array(
+      '#type' => 'radios',
+      '#title' => t('Display Flexiform Connect "add" button?'),
+      '#options' => array(
+        '1' => t('Yes'),
+        '0' => t('No')
+      ),
+      '#default_value' => $enabled,
+    ),
+    'label' => array(
+      '#title' => t('Add new link label'),
+      '#description' => t('The text to use for the link that triggers the modal.'),
+      '#type' => 'textfield',
+      '#default_value' => $label,
+      '#states' => array(
+        'visible' => array(
+          ':input[name="instance[erf_settings][enabled]"]' => array('value' => '1'),
+        ),
+        'required' => array(
+          ':input[name="instance[erf_settings][enabled]"]' => array('value' => '1'),
+        ),
+      ),
+      '#element_validate' => array('erf_connect_validate_setting'),
+    ),
+    'flexiform_target_id' => array(
+      '#title' => t('Select the target Flexiform.'),
+      '#description' =>
+        t('Select a Flexiform to use in the modal window.') . "<br />" .
+        t('Only forms that have a base entity type of %entity and a bundle(s) of %bundle are available as possible options.',
+          array(
+            '%entity' => $entity_type,
+            '%bundle' => implode(',', $target_bundles)
+          )),
+      '#type' => 'select',
+      '#options' => $flexiforms_options,
+      '#empty_option' => 'Choose a Flexiform',
+      '#default_value' => $target_flexiform,
+      '#element_validate' => array('erf_connect_validate_setting'),
+      '#empty_value' => '',
+      '#states' => array(
+        'visible' => array(
+          ':input[name="instance[erf_settings][enabled]"]' => array('value' => '1'),
+        ),
+        'required' => array(
+          ':input[name="instance[erf_settings][enabled]"]' => array('value' => '1'),
+        ),
+      ),
+    ),
+  );
+}
+
+function erf_connect_validate_setting($element, &$form_state, $form) {
+  if(empty($element['#value']) && !empty($form_state['values']['instance']['erf_settings']['enabled'])) {
+    form_error($element, t('The field "@name" is required.', array('@name' => $element['#title'])));
+  }
+}
+
+/**
+ * Implements hook_field_widget_form_alter().
+ */
+function erf_connect_field_widget_form_alter(&$element, &$form_state, $context) {
+  if(!empty($context['instance']['erf_settings']['enabled'])) {
+    $flexiform = entity_load_single('flexiform', $context['instance']['erf_settings']['flexiform_target_id']);
+    if(empty($flexiform)) {
+      return;
+    }
+
+    ctools_include('modal');
+    ctools_modal_add_js();
+
+    $form_name = $flexiform->form;
+    $entity_type = $context['instance']['entity_type'];
+    $bundle = $context['instance']['bundle'];
+    $bundle = (empty($bundle) ? $entity_type : $bundle);
+    $field_name = $context['instance']['field_name'];
+    $label = $context['instance']['erf_settings']['label'];
+
+    $link_element = array(
+      '#theme' => 'link',
+      '#text' => $label,
+      '#path' => "flexiform/$form_name/ajax",
+      '#options' => array(
+        'query' => array(
+          'erf-entity' => $entity_type,
+          'erf-bundle' => $bundle,
+          'erf-field' => $field_name
+        ),
+        'attributes' => array(
+          'id' => drupal_html_id($form_name . "-link"),
+          'class' => array(
+            'ctools-use-modal',
+            'erf-link',
+            'modal-link'
+          ),
+        ),
+      ),
+      '#attached' => array(
+        'library' => array(
+          array('erf_connect', 'erf-connect-ui')
+        ),
+      ),
+    );
+
+    $element['erf_connect_modal'] = array(
+      '#markup' => render($link_element),
+      '#weight' => -1,
+    );
+  }
+}
+
+
+/**
+ * Implements hook_library().
+ */
+function erf_connect_library() {
+  return array(
+    'erf-connect-ui' => array(
+      'title' => t('Entity Reference Flexiform Connect'),
+      'version' => '0.0.1',
+      'js' => array(
+        drupal_get_path('module', 'erf_connect') . '/js/erf-connect' => array('type' => 'file'),
+      ),
+    )
+  );
+}
+
+
+/**
+ * Implements hook_flexiform_modal_submit_commands_alter().
+ */
+function erf_connect_flexiform_modal_submit_commands_alter(&$commands, $flexiform, $form_state) {
+  if($form_state['complete form'] && !empty($form_state['complete form']['#validated']) && !empty($_GET['erf-field'])) {
+    // Get the IDs of newly created entities.
+    $builder = $form_state['complete form']['#flexiform_builder'];
+    //$builder = new FlexiformBuilderFlexiform();
+    $entity_manager = $builder->getEntityManager($form_state);
+    $entity_settings = $entity_manager->getEntitySettings('base_entity');
+    $entities = $entity_manager->getEntities();
+    foreach($entities as $entity) {
+      // Remove the "fc" property. It will cause issues during recursion.
+      unset($entity->fc);
+    }
+
+    $field = field_read_field($_GET['erf-field']);
+    $instance = field_read_instance($_GET['erf-entity'], $field['field_name'], $_GET['erf-bundle']);
+
+    $base_entity = $entity_manager->getBaseEntity();
+    $wrapper = entity_metadata_wrapper($entity_settings['entity_type'], $base_entity);
+
+    $display_name = $field['settings']['handler_settings']['view']['display_name'];
+    $args = $field['settings']['handler_settings']['view']['args'];
+
+    $view_name = $field['settings']['handler_settings']['view']['view_name'];
+
+    // Check that the view is valid and the display still exists.
+    $view = views_get_view($view_name);
+    if (!$view || !isset($view->display[$display_name]) || !$view->access($display_name)) {
+      watchdog(
+        'entityreference',
+        'The view %view_name is no longer eligible for the %field_name field.',
+        array(
+          '%view_name' => $view_name,
+          '%field_name' => $instance['label']),
+        WATCHDOG_WARNING);
+      return FALSE;
+    }
+    $view->set_display($display_name);
+
+    // Make sure the query is not cached.
+    $view->is_cacheable = FALSE;
+
+    // Pass options to the display handler to make them available later.
+    $entityreference_options = array(
+      'match' => NULL,
+      'match_operator' => 'CONTAINS',
+      'limit' => 0,
+      'ids' => array($wrapper->getIdentifier()),
+    );
+    $view->display_handler->set_option('entityreference_options', $entityreference_options);
+    // Get the results.
+    $result = $view->execute_display($display_name, $args);
+    $result_label = trim($result[$wrapper->getIdentifier()]) . " (" . $wrapper->getIdentifier() . ")";
+
+    $return_values = array_merge(array("value" => $result_label), $entities);
+    $commands[] = ajax_command_invoke(NULL, 'setErfConnectAutocompleteValue', array($return_values));
+  }
+}

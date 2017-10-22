@@ -1,0 +1,6 @@
+name="Entity Reference Flexiform Connect"
+description="Adds a \"create entity\" link to an entity reference field that opens a Flexiform in a modal that has the same base entity as the field's target."
+core=7.x
+dependencies[]=ctools
+dependencies[]=flexiform
+dependencies[]=entityreference
