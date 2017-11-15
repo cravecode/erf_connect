@@ -1,0 +1,12 @@
+<?php
+
+/**
+ * Implements hook_install()
+ */
+function erf_connect_install() {
+  // We want to set the weight of this module a little higher than most, this way we can run after other modules.
+  db_update('system')
+    ->fields(array('weight' => '1'))
+    ->condition('name', 'erf_connect')
+    ->execute();
+}
