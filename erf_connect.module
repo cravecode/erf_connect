@@ -183,7 +183,7 @@ function erf_connect_library() {
       'title' => t('Entity Reference Flexiform Connect'),
       'version' => '0.0.1',
       'js' => array(
-        drupal_get_path('module', 'erf_connect') . '/js/erf-connect' => array('type' => 'file'),
+        drupal_get_path('module', 'erf_connect') . '/js/erf-connect.js' => array('type' => 'file'),
       ),
     )
   );
