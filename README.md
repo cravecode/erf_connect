@@ -13,6 +13,7 @@ This module requires the following modules to also be installed:
 
   * [Flexiform](/project/flexiform)
   * [Entity Reference](/project/entity_reference)
+  * [CTools](/project/ctools)
 
 ## Installation
 
