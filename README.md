@@ -1,13 +1,13 @@
-##Description
+## Description
 
 This module behaves a lot like the [entityconnect](/project/entityconnect) module. It will add a "Create entity" link to [Entity Reference](/project/entity_reference) fields. This "Create entity" link will open the configured [Flexiform](/project/flexiform) form in a modal window. The entity created in the submission of the [Flexiform](/project/flexiform) is populated in the [Entity Reference](/project/entity_reference) field
 
 
-###Important note about functionality
+### Important note about functionality
 Currently only supports creating a new entity in the form, not loading an existing entity to edit.
 
 
-##Dependencies
+## Dependencies
 
 This module requires the following modules to also be installed:
 
