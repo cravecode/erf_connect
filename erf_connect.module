@@ -149,6 +149,7 @@ function erf_connect_field_widget_form_alter(&$element, &$form_state, $context) 
           'erf-bundle' => $bundle,
           'erf-field' => $field_name
         ),
+        'html' => false,
         'attributes' => array(
           'id' => drupal_html_id($form_name . "-link"),
           'class' => array(
